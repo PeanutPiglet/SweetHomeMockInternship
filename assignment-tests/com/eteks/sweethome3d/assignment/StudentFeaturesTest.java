@@ -109,6 +109,48 @@ class StudentFeaturesTest {
     }
   }
 
+  @Test
+  void planPageDoesNotRetainPixelsFromPreviousLevels() {
+    Home home = new Home();
+    Level lowerLevel = new Level("Lower", 0, 10f, 240f);
+    Level upperLevel = new Level("Upper", 250f, 10f, 240f);
+    home.addLevel(lowerLevel);
+    home.addLevel(upperLevel);
+
+    Wall lowerWall = new Wall(0, 0, 200, 0, 10, 240);
+    lowerWall.setLevel(lowerLevel);
+    home.addWall(lowerWall);
+    Wall upperWall = new Wall(0, 0, 0, 200, 10, 240);
+    upperWall.setLevel(upperLevel);
+    home.addWall(upperWall);
+
+    home.setSelectedLevel(upperLevel);
+    PlanComponent plan = new PlanComponent(home, new DefaultUserPreferences(), null);
+    PageFormat pageFormat = letterPage();
+    BufferedImage pageWithLowerLevelEnabled = printPlanPage(plan, pageFormat, 1);
+
+    lowerLevel.setViewable(false);
+    BufferedImage pageWithLowerLevelHidden = printPlanPage(plan, pageFormat, 0);
+    for (int y = 0; y < pageWithLowerLevelEnabled.getHeight(); y++) {
+      for (int x = 0; x < pageWithLowerLevelEnabled.getWidth(); x++) {
+        assertEquals(pageWithLowerLevelHidden.getRGB(x, y),
+            pageWithLowerLevelEnabled.getRGB(x, y),
+            "Printing the upper level must not retain lower-level pixels");
+      }
+    }
+  }
+
+  private static BufferedImage printPlanPage(PlanComponent plan, PageFormat pageFormat, int pageIndex) {
+    BufferedImage pageImage = new BufferedImage(800, 1000, BufferedImage.TYPE_INT_ARGB);
+    Graphics2D graphics = pageImage.createGraphics();
+    try {
+      assertEquals(PlanComponent.PAGE_EXISTS, plan.print(graphics, pageFormat, pageIndex));
+    } finally {
+      graphics.dispose();
+    }
+    return pageImage;
+  }
+
   private static HomePieceOfFurniture.SortableProperty sortableProperty(String name) {
     try {
       return HomePieceOfFurniture.SortableProperty.valueOf(name);

@@ -285,6 +285,7 @@ public class PlanComponent extends JComponent implements PlanView, Scrollable, P
   private List<DimensionLine>   dimensionLinesFeedback;
   private boolean               selectionScrollUpdated;
   private boolean               wallsDoorsOrWindowsModification;
+  private boolean               printingLevel;
   private JToolTip              toolTip;
   private JWindow               toolTipWindow;
   private boolean               resizeIndicatorVisible;
@@ -2009,7 +2010,9 @@ public class PlanComponent extends JComponent implements PlanView, Scrollable, P
    */
   public int print(Graphics g, PageFormat pageFormat, int pageIndex) {
     Level originallySelectedLevel = this.home.getSelectedLevel();
-    Graphics countGraphics = g.create();
+    Graphics countGraphics = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB).getGraphics();
+    boolean oldPrintingLevel = this.printingLevel;
+    this.printingLevel = true;
     try {
       if (this.home.getLevels().isEmpty()) {
         return printSelectedLevel(countGraphics, pageFormat, pageIndex);
@@ -2030,6 +2033,7 @@ public class PlanComponent extends JComponent implements PlanView, Scrollable, P
       }
       return NO_SUCH_PAGE;
     } finally {
+      this.printingLevel = oldPrintingLevel;
       countGraphics.dispose();
       this.home.setSelectedLevel(originallySelectedLevel);
     }
@@ -3455,6 +3459,9 @@ public class PlanComponent extends JComponent implements PlanView, Scrollable, P
    */
   private boolean isViewableAtSelectedLevel(Elevatable item) {
     Level level = item.getLevel();
+    if (this.printingLevel) {
+      return level == null || level.isViewable() && level == this.home.getSelectedLevel();
+    }
     return level == null
         || (level.isViewable()
             && item.isAtLevel(this.home.getSelectedLevel()));
