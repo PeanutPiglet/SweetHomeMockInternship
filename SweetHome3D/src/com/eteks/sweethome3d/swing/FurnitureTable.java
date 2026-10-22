@@ -87,8 +87,6 @@ import javax.swing.event.TableColumnModelEvent;
 import javax.swing.event.TableColumnModelListener;
 import javax.swing.event.TreeModelEvent;
 import javax.swing.event.TreeModelListener;
-import javax.swing.plaf.TreeUI;
-import javax.swing.plaf.basic.BasicTreeUI;
 import javax.swing.plaf.synth.SynthLookAndFeel;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
@@ -827,10 +825,11 @@ public class FurnitureTable extends JTable implements View, Printable {
           break;
         }
       }
-      TreeUI oldTreeUI = null;
+      boolean printableTreeRendering = false;
       try {
         if (nameRenderer != null) {
-          oldTreeUI = nameRenderer.usePrintableTreeUI(this);
+          nameRenderer.setPrintableRendering(this, true);
+          printableTreeRendering = true;
         }
         setColumnModel(printableColumnModel);
         if (OperatingSystem.isWindows()) {
@@ -846,8 +845,8 @@ public class FurnitureTable extends JTable implements View, Printable {
         // Restore column model and grid color to their previous values
         setColumnModel(oldColumnModel);
         setGridColor(oldGridColor);
-        if (nameRenderer != null && oldTreeUI != null) {
-          nameRenderer.restoreTreeUI(oldTreeUI);
+        if (nameRenderer != null && printableTreeRendering) {
+          nameRenderer.setPrintableRendering(this, false);
         }
       }
     } else {
@@ -1791,6 +1790,9 @@ public class FurnitureTable extends JTable implements View, Printable {
           }
         }
       }
+      if (this.printableRendering) {
+        return getPrintableRendererComponent(table, piece, row, column);
+      }
       if (containsGroup) {
         prepareTree(table);   
         if (this.groupRendererComponent == null) {
@@ -1841,6 +1843,39 @@ public class FurnitureTable extends JTable implements View, Printable {
         this.nameRendererLabel.setBorder(null);
         return this.noGroupRendererComponent;
       }
+    }
+
+    private Component getPrintableRendererComponent(JTable table, HomePieceOfFurniture piece,
+                                                     int row, int column) {
+      if (this.noGroupRendererComponent == null) {
+        this.nameRendererLabel = new DefaultTableCellRenderer();
+        this.noGroupRendererComponent = new PanelWithInformationIcon();
+        this.noGroupRendererComponent.add(this.nameRendererLabel, BorderLayout.CENTER);
+      }
+
+      this.nameRendererLabel.getTableCellRendererComponent(table,
+          piece != null ? piece.getName() : null, false, false, row, column);
+      this.nameRendererLabel.setForeground(Color.BLACK);
+      this.nameRendererLabel.setBackground(Color.WHITE);
+      this.nameRendererLabel.setBorder(null);
+      this.noGroupRendererComponent.setBackground(Color.WHITE);
+      if (piece != null) {
+        TreePath path = this.nameRendererTree.getPathForRow(row);
+        int depth = path != null ? path.getPathCount() - 2 : 0;
+        boolean expanded = path != null && this.nameRendererTree.isExpanded(path);
+        Content iconContent = piece instanceof HomeFurnitureGroup
+            ? GROUP_ICON_CONTENT
+            : piece.getIcon();
+        Icon furnitureIcon = IconManager.getInstance().getIcon(
+            iconContent, table.getRowHeight() - table.getRowMargin(), table);
+        this.nameRendererLabel.setIcon(new PrintableFurnitureIcon(
+            depth, piece instanceof HomeFurnitureGroup, expanded, furnitureIcon));
+        this.noGroupRendererComponent.setInformationIconVisible(piece.getInformation() != null);
+      } else {
+        this.nameRendererLabel.setIcon(null);
+        this.noGroupRendererComponent.setInformationIconVisible(false);
+      }
+      return this.noGroupRendererComponent;
     }
 
     /**
@@ -1940,18 +1975,55 @@ public class FurnitureTable extends JTable implements View, Printable {
       }
     }
 
-    public TreeUI usePrintableTreeUI(JTable table) {
+    private boolean printableRendering;
+
+    public void setPrintableRendering(JTable table, boolean printableRendering) {
       prepareTree(table);
-      TreeUI previousTreeUI = this.nameRendererTree.getUI();
-      BasicTreeUI printableTreeUI = new BasicTreeUI();
-      printableTreeUI.setExpandedIcon(new TreeExpansionIcon(true));
-      printableTreeUI.setCollapsedIcon(new TreeExpansionIcon(false));
-      this.nameRendererTree.setUI(printableTreeUI);
-      return previousTreeUI;
+      this.printableRendering = printableRendering;
     }
 
-    public void restoreTreeUI(TreeUI treeUI) {
-      this.nameRendererTree.setUI(treeUI);
+    private static class PrintableFurnitureIcon implements Icon {
+      private final int depth;
+      private final boolean group;
+      private final boolean expanded;
+      private final Icon furnitureIcon;
+
+      public PrintableFurnitureIcon(int depth, boolean group, boolean expanded, Icon furnitureIcon) {
+        this.depth = depth;
+        this.group = group;
+        this.expanded = expanded;
+        this.furnitureIcon = furnitureIcon;
+      }
+
+      public int getIconWidth() {
+        return this.depth * 16 + 14
+            + (this.furnitureIcon != null ? this.furnitureIcon.getIconWidth() : 0);
+      }
+
+      public int getIconHeight() {
+        return this.furnitureIcon != null ? this.furnitureIcon.getIconHeight() : 0;
+      }
+
+      public void paintIcon(Component component, Graphics graphics, int x, int y) {
+        if (this.group) {
+          int markerX = x + this.depth * 16 + 3;
+          int markerY = y + Math.max(0, (getIconHeight() - 8) / 2);
+          Polygon marker = this.expanded
+              ? new Polygon(new int [] {markerX, markerX + 8, markerX + 4},
+                  new int [] {markerY + 2, markerY + 2, markerY + 6}, 3)
+              : new Polygon(new int [] {markerX + 2, markerX + 2, markerX + 6},
+                  new int [] {markerY, markerY + 8, markerY + 4}, 3);
+          Color oldColor = graphics.getColor();
+          graphics.setColor(Color.BLACK);
+          graphics.fillPolygon(marker);
+          graphics.setColor(oldColor);
+        }
+        if (this.furnitureIcon != null) {
+          this.furnitureIcon.paintIcon(component, graphics,
+              x + this.depth * 16 + 14,
+              y + (getIconHeight() - this.furnitureIcon.getIconHeight()) / 2);
+        }
+      }
     }
 
     private void updateExpandedRows(FurnitureTreeTableModel tableTreeModel) {
@@ -1972,34 +2044,6 @@ public class FurnitureTable extends JTable implements View, Printable {
       }
     }
 
-    private static class TreeExpansionIcon implements Icon {
-      private final boolean expanded;
-
-      public TreeExpansionIcon(boolean expanded) {
-        this.expanded = expanded;
-      }
-
-      public int getIconWidth() {
-        return 8;
-      }
-
-      public int getIconHeight() {
-        return 8;
-      }
-
-      public void paintIcon(Component component, Graphics graphics, int x, int y) {
-        Color oldColor = graphics.getColor();
-        graphics.setColor(Color.BLACK);
-        Polygon triangle = this.expanded
-            ? new Polygon(new int [] {x + 1, x + 7, x + 4},
-                new int [] {y + 2, y + 2, y + 6}, 3)
-            : new Polygon(new int [] {x + 2, x + 2, x + 6},
-                new int [] {y + 1, y + 7, y + 4}, 3);
-        graphics.fillPolygon(triangle);
-        graphics.setColor(oldColor);
-      }
-    }
-    
     /**
      * Returns the bounds of the space in front of a tree node.
      */
