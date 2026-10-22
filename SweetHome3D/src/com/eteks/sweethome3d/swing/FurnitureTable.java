@@ -754,6 +754,8 @@ public class FurnitureTable extends JTable implements View, Printable {
     }
     final DefaultTableCellRenderer defaultRenderer = new DefaultTableCellRenderer();
     defaultRenderer.setHorizontalAlignment(DefaultTableCellRenderer.CENTER);
+    final DefaultTableCellRenderer printableNameRenderer = new DefaultTableCellRenderer();
+    printableNameRenderer.setHorizontalAlignment(DefaultTableCellRenderer.LEFT);
     TableCellRenderer printableHeaderRenderer = new TableCellRenderer() {
         public Component getTableCellRendererComponent(JTable table, Object value, 
                                    boolean isSelected, boolean hasFocus, int row, int column) {
@@ -780,10 +782,19 @@ public class FurnitureTable extends JTable implements View, Printable {
       TableCellRenderer printableCellRenderer = new TableCellRenderer() {
           public Component getTableCellRendererComponent(JTable table, Object value, 
                                  boolean isSelected, boolean hasFocus, int row, int column) {
-            // Delegate rendering to existing cell renderer 
-            TableCellRenderer cellRenderer = tableColumn.getCellRenderer();
-            Component rendererComponent = cellRenderer.getTableCellRendererComponent(table, value, 
-                isSelected, hasFocus, row, column);
+            Component rendererComponent;
+            if (HomePieceOfFurniture.SortableProperty.NAME.equals(tableColumn.getIdentifier())) {
+              String name = value instanceof HomePieceOfFurniture
+                  ? ((HomePieceOfFurniture)value).getName()
+                  : null;
+              rendererComponent = printableNameRenderer.getTableCellRendererComponent(
+                  table, name, isSelected, hasFocus, row, column);
+            } else {
+              // Delegate rendering to existing cell renderer
+              TableCellRenderer cellRenderer = tableColumn.getCellRenderer();
+              rendererComponent = cellRenderer.getTableCellRendererComponent(table, value,
+                  isSelected, hasFocus, row, column);
+            }
             if (rendererComponent instanceof JCheckBox) {
               // Prefer a x sign for boolean values instead of check boxes
               rendererComponent = defaultRenderer.getTableCellRendererComponent(table, 

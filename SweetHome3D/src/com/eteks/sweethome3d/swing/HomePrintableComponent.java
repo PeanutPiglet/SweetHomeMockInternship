@@ -50,7 +50,6 @@ import com.eteks.sweethome3d.model.Home;
 import com.eteks.sweethome3d.model.HomePieceOfFurniture;
 import com.eteks.sweethome3d.model.HomePrint;
 import com.eteks.sweethome3d.model.LengthUnit;
-import com.eteks.sweethome3d.model.Level;
 import com.eteks.sweethome3d.viewcontroller.ContentManager;
 import com.eteks.sweethome3d.viewcontroller.HomeController;
 import com.eteks.sweethome3d.viewcontroller.PlanView;
@@ -382,24 +381,7 @@ public class HomePrintableComponent extends JComponent implements Printable {
     if (pageExists == NO_SUCH_PAGE 
         && planView != null 
         && (homePrint == null || homePrint.isPlanPrinted())) {
-      // Print all pages for each viewable level in home order.
-      int planPageIndex = page - this.furniturePageCount;
-      Level originallySelectedLevel = this.home.getSelectedLevel();
-      try {
-        for (Level level : this.home.getLevels()) {
-          if (level.isViewable()) {
-            this.home.setSelectedLevel(level);
-            int levelPageCount = getPlanPageCount((Printable)planView, pageFormat);
-            if (planPageIndex < levelPageCount) {
-              pageExists = ((Printable)planView).print(g2D, pageFormat, planPageIndex);
-              break;
-            }
-            planPageIndex -= levelPageCount;
-          }
-        }
-      } finally {
-        this.home.setSelectedLevel(originallySelectedLevel);
-      }
+      pageExists = ((Printable)planView).print(g2D, pageFormat, page - this.furniturePageCount);
       if (pageExists == PAGE_EXISTS
           && !this.printablePages.contains(page)) {
         this.printablePages.add(page);
@@ -442,20 +424,6 @@ public class HomePrintableComponent extends JComponent implements Printable {
     }  
     pageFormat.setPaper(oldPaper);    
     return pageExists;
-  }
-
-  private int getPlanPageCount(Printable plan, PageFormat pageFormat) throws PrinterException {
-    BufferedImage dummyImage = new BufferedImage(1, 1, BufferedImage.TYPE_INT_RGB);
-    Graphics dummyGraphics = dummyImage.getGraphics();
-    try {
-      int pageCount = 0;
-      while (plan.print(dummyGraphics, pageFormat, pageCount) == PAGE_EXISTS) {
-        pageCount++;
-      }
-      return pageCount;
-    } finally {
-      dummyGraphics.dispose();
-    }
   }
 
   /**
