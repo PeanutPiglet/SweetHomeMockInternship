@@ -27,6 +27,7 @@ import java.awt.EventQueue;
 import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Point;
+import java.awt.Polygon;
 import java.awt.Rectangle;
 import java.awt.event.AWTEventListener;
 import java.awt.event.KeyEvent;
@@ -86,6 +87,8 @@ import javax.swing.event.TableColumnModelEvent;
 import javax.swing.event.TableColumnModelListener;
 import javax.swing.event.TreeModelEvent;
 import javax.swing.event.TreeModelListener;
+import javax.swing.plaf.TreeUI;
+import javax.swing.plaf.basic.BasicTreeUI;
 import javax.swing.plaf.synth.SynthLookAndFeel;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
@@ -754,8 +757,6 @@ public class FurnitureTable extends JTable implements View, Printable {
     }
     final DefaultTableCellRenderer defaultRenderer = new DefaultTableCellRenderer();
     defaultRenderer.setHorizontalAlignment(DefaultTableCellRenderer.CENTER);
-    final DefaultTableCellRenderer printableNameRenderer = new DefaultTableCellRenderer();
-    printableNameRenderer.setHorizontalAlignment(DefaultTableCellRenderer.LEFT);
     TableCellRenderer printableHeaderRenderer = new TableCellRenderer() {
         public Component getTableCellRendererComponent(JTable table, Object value, 
                                    boolean isSelected, boolean hasFocus, int row, int column) {
@@ -783,18 +784,10 @@ public class FurnitureTable extends JTable implements View, Printable {
           public Component getTableCellRendererComponent(JTable table, Object value, 
                                  boolean isSelected, boolean hasFocus, int row, int column) {
             Component rendererComponent;
-            if (HomePieceOfFurniture.SortableProperty.NAME.equals(tableColumn.getIdentifier())) {
-              String name = value instanceof HomePieceOfFurniture
-                  ? ((HomePieceOfFurniture)value).getName()
-                  : null;
-              rendererComponent = printableNameRenderer.getTableCellRendererComponent(
-                  table, name, isSelected, hasFocus, row, column);
-            } else {
               // Delegate rendering to existing cell renderer
               TableCellRenderer cellRenderer = tableColumn.getCellRenderer();
               rendererComponent = cellRenderer.getTableCellRendererComponent(table, value,
                   isSelected, hasFocus, row, column);
-            }
             if (rendererComponent instanceof JCheckBox) {
               // Prefer a x sign for boolean values instead of check boxes
               rendererComponent = defaultRenderer.getTableCellRendererComponent(table, 
@@ -825,14 +818,27 @@ public class FurnitureTable extends JTable implements View, Printable {
     if (EventQueue.isDispatchThread()) {
       TableColumnModel oldColumnModel = getColumnModel();
       Color oldGridColor = getGridColor();
-      setColumnModel(printableColumnModel);   
-      if (OperatingSystem.isWindows()) {
-        // Add 3 pixels to columns to get a correct rendering
-        updateTableColumnsWidth(3);
-      } else {
-        updateTableColumnsWidth(0);
+      TreeTableNameCellRenderer nameRenderer = null;
+      for (int columnIndex = 0; columnIndex < oldColumnModel.getColumnCount(); columnIndex++) {
+        TableColumn column = oldColumnModel.getColumn(columnIndex);
+        if (HomePieceOfFurniture.SortableProperty.NAME.equals(column.getIdentifier())
+            && column.getCellRenderer() instanceof TreeTableNameCellRenderer) {
+          nameRenderer = (TreeTableNameCellRenderer)column.getCellRenderer();
+          break;
+        }
       }
+      TreeUI oldTreeUI = null;
       try {
+        if (nameRenderer != null) {
+          oldTreeUI = nameRenderer.usePrintableTreeUI(this);
+        }
+        setColumnModel(printableColumnModel);
+        if (OperatingSystem.isWindows()) {
+          // Add 3 pixels to columns to get a correct rendering
+          updateTableColumnsWidth(3);
+        } else {
+          updateTableColumnsWidth(0);
+        }
         setGridColor(gridColor);
         Printable printable = getPrintable(PrintMode.FIT_WIDTH, null, null);
         return printable.print(g, pageFormat, pageIndex);
@@ -840,6 +846,9 @@ public class FurnitureTable extends JTable implements View, Printable {
         // Restore column model and grid color to their previous values
         setColumnModel(oldColumnModel);
         setGridColor(oldGridColor);
+        if (nameRenderer != null && oldTreeUI != null) {
+          nameRenderer.restoreTreeUI(oldTreeUI);
+        }
       }
     } else {
       // Print synchronously table in Event Dispatch Thread
@@ -1931,6 +1940,20 @@ public class FurnitureTable extends JTable implements View, Printable {
       }
     }
 
+    public TreeUI usePrintableTreeUI(JTable table) {
+      prepareTree(table);
+      TreeUI previousTreeUI = this.nameRendererTree.getUI();
+      BasicTreeUI printableTreeUI = new BasicTreeUI();
+      printableTreeUI.setExpandedIcon(new TreeExpansionIcon(true));
+      printableTreeUI.setCollapsedIcon(new TreeExpansionIcon(false));
+      this.nameRendererTree.setUI(printableTreeUI);
+      return previousTreeUI;
+    }
+
+    public void restoreTreeUI(TreeUI treeUI) {
+      this.nameRendererTree.setUI(treeUI);
+    }
+
     private void updateExpandedRows(FurnitureTreeTableModel tableTreeModel) {
       for (int row = 0; row < tableTreeModel.getRowCount(); row++) {
         if (tableTreeModel.getValueAt(row, 0) instanceof HomeFurnitureGroup) {
@@ -1946,6 +1969,34 @@ public class FurnitureTable extends JTable implements View, Printable {
             }
           }
         }
+      }
+    }
+
+    private static class TreeExpansionIcon implements Icon {
+      private final boolean expanded;
+
+      public TreeExpansionIcon(boolean expanded) {
+        this.expanded = expanded;
+      }
+
+      public int getIconWidth() {
+        return 8;
+      }
+
+      public int getIconHeight() {
+        return 8;
+      }
+
+      public void paintIcon(Component component, Graphics graphics, int x, int y) {
+        Color oldColor = graphics.getColor();
+        graphics.setColor(Color.BLACK);
+        Polygon triangle = this.expanded
+            ? new Polygon(new int [] {x + 1, x + 7, x + 4},
+                new int [] {y + 2, y + 2, y + 6}, 3)
+            : new Polygon(new int [] {x + 2, x + 2, x + 6},
+                new int [] {y + 1, y + 7, y + 4}, 3);
+        graphics.fillPolygon(triangle);
+        graphics.setColor(oldColor);
       }
     }
     
